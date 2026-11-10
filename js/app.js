@@ -330,7 +330,6 @@ function pilotCard(t, race, c, latest, groups, p) {
   const sp = sps.find(s => s.id === c.sid);
   const ints = c.sid ? race.intermediates(c.sid) : [];
   const cols = [...ints.map((m, i) => ({ k: i, h: `I${i + 1}`, sub: `km ${(m / 1000).toFixed(2)}` })), { k: 'F', h: 'Final', sub: sp ? `${(sp.meters / 1000).toFixed(1)} km` : '' }];
-  const group = groups.find(g => g.key === c.group) || groups[0];
   const pens = race.pensOf(t.pid);
   const penTotal = pens.reduce((a, x) => a + (Number(x.time) || 0), 0);
   const ab = race.abandoned(t.pid);
@@ -346,30 +345,41 @@ function pilotCard(t, race, c, latest, groups, p) {
       let arrow = '';
       if (pos && prev) arrow = pos < prev ? `<i class="up">▲${prev - pos}</i>` : pos > prev ? `<i class="down">▼${pos - prev}</i>` : '';
       if (pos) prev = pos;
-      const sel = col.k === c.k && g.key === group.key;
-      return `<td class="cell ${sel ? 'sel' : ''} ${col.k === c.k ? 'colsel' : ''}" data-card="${key}" data-k="${col.k}" data-g="${esc(g.key)}">${pos ? `${pos}º` : '·'}${arrow}</td>`;
+      return `<td class="cell ${col.k === c.k ? 'colsel' : ''}" data-card="${key}" data-k="${col.k}" data-g="${esc(g.key)}">${pos ? `${pos}º` : '·'}${arrow}</td>`;
     }).join('');
     return `<tr><th class="gl" data-card="${key}" data-g="${esc(g.key)}" data-k="${c.k}"><span>${esc(g.label)}</span>${g.value ? `<b>${esc(g.value)}</b>` : ''}</th>${cells}</tr>`;
   }).join('');
 
-  // vizinhança: 3 à frente e 3 atrás
-  const rows = c.sid ? race.filter(rk(c.k), group) : [];
-  const me = rows.findIndex(r => r.pid === t.pid);
-  const from = me < 0 ? 0 : Math.max(0, me - NEIGHBOURS);
-  const to = me < 0 ? Math.min(rows.length, NEIGHBOURS * 2 + 1) : Math.min(rows.length, me + NEIGHBOURS + 1);
-  const myV = me >= 0 ? rows[me].v : null;
-  const leadV = rows[0]?.v;
-  const nb = rows.slice(from, to).map((r, i) => {
-    const q = race.parts.get(r.pid) || {};
-    const mine = r.pid === t.pid;
-    const other = !mine && isTracked(t.rid, r.pid);
-    const miss = r.missing ? `<span class="bad small">−${r.missing} esp.</span>` : '';
-    return `<tr class="${mine ? 'me' : ''} ${other ? 'other' : ''}">
-      <td class="pos">${from + i + 1}º</td><td class="num">${esc(q.ident)}</td>
-      <td class="nm">${esc(q.pilot)}<br><small class="muted">${esc([q.class, q.vehicle].filter(Boolean).join(' · '))}</small></td>
-      <td class="t">${fmtTime(r.v, dec)}${r.pen ? `<br><small class="bad">pen ${fmtTime(r.pen, 0)}</small>` : ''}</td>
-      <td class="t">${mine ? '—' : r.missing || (me >= 0 && rows[me].missing) ? miss || '—' : fmtGap(myV != null ? r.v - myV : null, dec)}</td>
-      <td class="t muted">${from + i === 0 ? 'líder' : r.missing ? '' : fmtGap(r.v - leadV, dec)}</td></tr>`;
+  // vizinhança: 3 à frente e 3 atrás, uma tabela por classificação
+  const nbTable = g => {
+    const rows = c.sid ? race.filter(rk(c.k), g) : [];
+    if (!rows.length) return '<p class="muted small">Ainda não há tempos neste ponto.</p>';
+    const me = rows.findIndex(r => r.pid === t.pid);
+    const from = me < 0 ? 0 : Math.max(0, me - NEIGHBOURS);
+    const to = me < 0 ? Math.min(rows.length, NEIGHBOURS * 2 + 1) : Math.min(rows.length, me + NEIGHBOURS + 1);
+    const myV = me >= 0 ? rows[me].v : null;
+    const leadV = rows[0]?.v;
+    const body = rows.slice(from, to).map((r, i) => {
+      const q = race.parts.get(r.pid) || {};
+      const mine = r.pid === t.pid;
+      const other = !mine && isTracked(t.rid, r.pid);
+      const miss = r.missing ? `<span class="bad small">−${r.missing} esp.</span>` : '';
+      return `<tr class="${mine ? 'me' : ''} ${other ? 'other' : ''}">
+        <td class="pos">${from + i + 1}º</td><td class="num">${esc(q.ident)}</td>
+        <td class="nm">${esc(q.pilot)}<br><small class="muted">${esc([q.class, q.vehicle].filter(Boolean).join(' · '))}</small></td>
+        <td class="t">${fmtTime(r.v, dec)}${r.pen ? `<br><small class="bad">pen ${fmtTime(r.pen, 0)}</small>` : ''}</td>
+        <td class="t">${mine ? '—' : r.missing || (me >= 0 && rows[me].missing) ? miss || '—' : fmtGap(myV != null ? r.v - myV : null, dec)}</td>
+        <td class="t muted">${from + i === 0 ? 'líder' : r.missing ? '' : fmtGap(r.v - leadV, dec)}</td></tr>`;
+    }).join('');
+    return `<table class="nb"><thead><tr><th>Pos</th><th>N.º</th><th>Piloto</th><th>Tempo</th><th>Dif.</th><th>Líder</th></tr></thead><tbody>${body}</tbody></table>
+      ${me < 0 ? '<p class="muted small">O piloto ainda não tem tempo neste ponto — mostro os primeiros.</p>' : ''}`;
+  };
+  const closed = c.closed || [];
+  const nbSections = groups.map(g => {
+    const pos = c.sid ? posOf(race.filter(rk(c.k), g), t.pid) : null;
+    return `<details class="nbsec" id="nb-${key}-${esc(g.key)}" data-fold="${key}" data-gk="${esc(g.key)}" ${closed.includes(g.key) ? '' : 'open'}>
+      <summary><span>${esc(g.label)}${g.value ? ' <b>' + esc(g.value) + '</b>' : ''}</span><span class="pos">${pos ? pos + 'º' : '—'}</span></summary>
+      ${nbTable(g)}</details>`;
   }).join('');
 
   const ptLabel = race.pointLabel(c.itin, { sid: c.sid, k: c.k });
@@ -395,12 +405,10 @@ function pilotCard(t, race, c, latest, groups, p) {
     ${sp ? `<div class="sphead small muted">${esc(sp.special_name)}${sp.name_extra && sp.name_extra.trim() !== sp.special_name ? ' — ' + esc(sp.name_extra) : ''} · ${(sp.meters / 1000).toFixed(2)} km${sp.compute === 0 ? ' · não conta para a geral' : ''}</div>` : ''}
     <div class="seg"><button class="${c.mode === 'stage' ? 'on' : ''}" data-mode="stage" data-card="${key}">Na especial</button><button class="${c.mode === 'overall' ? 'on' : ''}" data-mode="overall" data-card="${key}">À geral</button></div>
     ${c.sid ? `<div class="gridwrap" data-scroll="g-${key}"><table class="grid">
-      <thead><tr><th></th>${cols.map(col => `<th class="${col.k === c.k ? 'colsel' : ''}" data-card="${key}" data-k="${col.k}" data-g="${esc(group.key)}">${col.h}<small>${esc(col.sub)}</small></th>`).join('')}</tr></thead>
+      <thead><tr><th></th>${cols.map(col => `<th class="${col.k === c.k ? 'colsel' : ''}" data-card="${key}" data-k="${col.k}">${col.h}<small>${esc(col.sub)}</small></th>`).join('')}</tr></thead>
       <tbody>${gridRows}</tbody></table></div>` : ''}
-    <h4>${esc(group.label)}${group.value ? ' ' + esc(group.value) : ''} · ${esc(ptLabel)} · ${modeLabel}</h4>
-    ${rows.length ? `<table class="nb"><thead><tr><th>Pos</th><th>N.º</th><th>Piloto</th><th>Tempo</th><th>Dif.</th><th>Líder</th></tr></thead><tbody>${nb}</tbody></table>
-      ${me < 0 ? '<p class="muted small">O piloto ainda não tem tempo neste ponto — mostro os primeiros.</p>' : ''}`
-      : '<p class="muted small">Ainda não há tempos neste ponto.</p>'}
+    <h4>3 à frente e 3 atrás · ${esc(ptLabel)} · ${modeLabel}</h4>
+    ${nbSections}
   </section>`;
 }
 
@@ -429,11 +437,20 @@ function bindCards() {
   });
   el.querySelectorAll('[data-k][data-card]').forEach(b => b.onclick = () => {
     const c = st(b.dataset.card);
-    c.k = b.dataset.k === 'F' ? 'F' : Number(b.dataset.k);
-    if (b.dataset.g) c.group = b.dataset.g;
-    c.follow = false;
+    const k = b.dataset.k === 'F' ? 'F' : Number(b.dataset.k);
+    if (k !== c.k) { c.k = k; c.follow = false; }
+    const gk = b.dataset.g;
+    if (gk) c.closed = (c.closed || []).filter(x => x !== gk); // abre a tabela escolhida
     save(); renderLive();
+    if (gk) document.getElementById(`nb-${b.dataset.card}-${gk}`)?.scrollIntoView({ block: 'start' });
   });
+  el.querySelectorAll('details[data-fold]').forEach(d => d.addEventListener('toggle', () => {
+    const c = st(d.dataset.fold);
+    const set = new Set(c.closed || []);
+    if (d.open) set.delete(d.dataset.gk); else set.add(d.dataset.gk);
+    c.closed = [...set];
+    save();
+  }));
   el.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { st(b.dataset.card).mode = b.dataset.mode; save(); renderLive(); });
   el.querySelectorAll('[data-itin]').forEach(s => s.onchange = () => {
     const c = st(s.dataset.itin);

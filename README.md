@@ -15,7 +15,9 @@ No Chrome/Edge podes instalá-la como app: ícone "Instalar" na barra de endere�
   em modo **Na especial** ou **À geral** (nos intermédios, geral provisória =
   acumulado oficial até à especial anterior + tempo no intermédio).
 - Em todas as classificações do piloto: Geral, Categoria, Classe, Grupo e Campeonatos.
-- Os **3 pilotos à frente e 3 atrás**, com tempo, diferença para o piloto e para o líder.
+- Os **3 pilotos à frente e 3 atrás em cada classificação** (uma tabela por Geral, Categoria,
+  Classe, Grupo e Campeonato; cada tabela pode ser fechada com um toque), com tempo,
+  diferença para o piloto e para o líder.
   (Diferença negativa = esse piloto está à frente por esse tempo.)
 - Botão ☀ / ☾ no topo para mudar entre modo dia (claro, melhor ao sol) e modo noite (escuro).
 - Alertas: mudança de posição, novo tempo, abandono/penalização (toast, som, vibração
