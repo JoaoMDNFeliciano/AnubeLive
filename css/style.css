@@ -167,6 +167,34 @@ table { border-collapse: collapse; width: 100%; }
 .nb tr.me td { font-weight: 700; }
 .nb tr.other { background: var(--other); }
 
+/* Avisos de proximidade */
+.prox { padding: 10px 12px; display: grid; gap: 6px; }
+.prox.on { border-color: var(--accent); }
+.prox-h { margin: 0; }
+.prox-h b { flex: 1; }
+.row.wrap { flex-wrap: wrap; margin: 2px 0; }
+.warn-txt { color: var(--warn); font-weight: 600; }
+.proxline { display: flex; align-items: center; gap: 6px; background: var(--card2); border-radius: 8px; padding: 4px 4px 4px 10px; margin: 6px 0; font-size: 13.5px; }
+.proxline .ptxt { flex: 1; }
+.proxline .bell { width: 34px; height: 34px; font-size: 18px; }
+.near5 { color: var(--warn); }
+.near2 { color: var(--accent); }
+.near1 { color: var(--bad); }
+
+.flash {
+  position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 24px; color: #fff; cursor: pointer;
+}
+.flash.show { display: flex; animation: flash-bg .5s steps(1) infinite; }
+.flash.k5 { --c1: #e08a00; --c2: #3a2400; }
+.flash.k2 { --c1: #ff6a00; --c2: #3a1500; }
+.flash.k1 { --c1: #e00000; --c2: #2a0000; }
+@keyframes flash-bg { 0% { background: var(--c1); } 50% { background: var(--c2); } }
+.fl-km { font-size: clamp(72px, 26vw, 180px); font-weight: 900; line-height: 1; letter-spacing: -2px; }
+.fl-who { font-size: clamp(22px, 6vw, 40px); font-weight: 800; margin-top: 12px; }
+.fl-sub { font-size: clamp(16px, 4.2vw, 24px); margin-top: 8px; opacity: .95; }
+.fl-hint { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); font-size: 13px; opacity: .8; }
+
 #toasts { position: fixed; right: 12px; bottom: 12px; z-index: 50; display: grid; gap: 8px; width: min(380px, calc(100vw - 24px)); }
 .toast { background: var(--card2); border: 1px solid var(--accent); border-left: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); cursor: pointer; }
 

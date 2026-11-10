@@ -67,6 +67,18 @@ export async function fetchEvents() {
   return [...events.values()].sort((a, b) => (b.ut_ini || 0) - (a.ut_ini || 0));
 }
 
+// Ligações cronometragem (rallyId) -> mapa de tracking (subrally) de uma prova.
+export function trackLinks(ev) {
+  const subs = [ev?.main_subrally, ...(ev?.other_subrallies || [])].filter(Boolean);
+  const links = [];
+  for (const s of subs) {
+    const rid = Number(String(s.url_timing || '').match(/rallyId=(\d+)/)?.[1]);
+    const sid = Number(String(s.url_map || '').match(/rally=rally(\d+)/)?.[1]);
+    if (rid && sid) links.push({ rid, sid });
+  }
+  return links;
+}
+
 // IDs de cronometragem (rallyId) associados a uma prova.
 export function timingIds(ev) {
   const ids = new Set();

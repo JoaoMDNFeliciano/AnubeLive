@@ -1,6 +1,7 @@
 // AnubeLive — interface, atualização periódica e alertas.
-import { api, fetchEvents, timingIds } from './api.js';
+import { api, fetchEvents, timingIds, trackLinks } from './api.js';
 import { Race, STATE_LABEL, attrsOf, isLive, posOf, fmtTime, fmtGap } from './race.js';
+import { TrackSource, evaluate, siren, fmtKm } from './proximity.js';
 
 const LS_KEY = 'anubelive.v1';
 const NEIGHBOURS = 3;
@@ -12,6 +13,8 @@ const defaults = () => ({
   filter: { tab: 'ongoing', type: 'all', country: 'all', q: '' },
   cards: {},                   // estado de cada cartão por "rid:pid"
   settings: { interval: 15, alerts: { pos: true, time: true, ab: true }, sound: true, wake: false, theme: 'auto' },
+  prox: { on: false, useFixed: false, fixed: null, muted: [] }, // avisos de proximidade
+  trackIds: {},                // rallyId de cronometragem -> id do mapa de tracking (0 = sem mapa)
 });
 const S = (() => {
   const d = defaults();
@@ -20,6 +23,8 @@ const S = (() => {
     return {
       ...d, ...s,
       filter: { ...d.filter, ...(s.filter || {}) },
+      prox: { ...d.prox, ...(s.prox || {}) },
+      trackIds: { ...(s.trackIds || {}) },
       settings: { ...d.settings, ...(s.settings || {}), alerts: { ...d.settings.alerts, ...(s.settings?.alerts || {}) } },
     };
   } catch { return d; }
@@ -132,6 +137,7 @@ async function renderEvents() {
   el.querySelectorAll('[data-rid]').forEach(b => b.onclick = () => {
     const ev = events.find(x => x.id === Number(b.dataset.ev));
     S.event = { id: ev.id, name: ev.name, rids: timingIds(ev) };
+    for (const l of trackLinks(ev)) S.trackIds[l.rid] = l.sid;
     pickRid = Number(b.dataset.rid);
     save();
     go('pick');
@@ -283,7 +289,7 @@ function renderLive() {
       ${errs.length ? `<span class="bad">⚠ ${esc(errs[0])} — a tentar de novo</span>` : ''}
       <button class="btn small" id="refreshNow">Atualizar</button>
       ${S.event ? '<button class="btn small" id="addMore">+ Pilotos</button>' : ''}
-    </div>`;
+    </div>${proxPanel()}`;
 
   if (loading && !lastUpdate) { el.innerHTML = head + '<p class="muted center pad">A obter tempos…</p>'; bindLiveHead(); return; }
 
@@ -320,6 +326,24 @@ function renderLive() {
 function bindLiveHead() {
   $('#refreshNow')?.addEventListener('click', () => poll());
   $('#addMore')?.addEventListener('click', () => go('pick'));
+  bindProxPanel();
+}
+
+function bindProxPanel() {
+  $('#proxToggle')?.addEventListener('click', () => setProx(!S.prox.on));
+  $('#proxFix')?.addEventListener('click', () => {
+    if (!gpsPos) { toast('Ainda não há posição GPS para fixar.'); return; }
+    S.prox.fixed = { lat: gpsPos.lat, lon: gpsPos.lon };
+    S.prox.useFixed = true;
+    save(); refreshProxPanel(); proxTick();
+  });
+  $('#proxGps')?.addEventListener('click', () => { S.prox.useFixed = false; save(); refreshProxPanel(); proxTick(); });
+  $('#proxTest')?.addEventListener('click', () => {
+    unlockAudio();
+    const t = S.tracked[0];
+    const p = t ? getRace(t.rid).parts.get(t.pid) : null;
+    flashProx(2, `#${p?.ident ?? t?.ident ?? '000'} ${p?.pilot || 'Teste'}`, 'teste · pela estrada · 120 km/h');
+  });
 }
 
 function pilotCard(t, race, c, latest, groups, p) {
@@ -398,6 +422,7 @@ function pilotCard(t, race, c, latest, groups, p) {
     ${pens.length ? `<details class="pens"><summary>Penalizações: ${fmtTime(penTotal, 0)} (${pens.length})</summary>${pens.map(x => `<div class="small">${esc(race.specialsOf(c.itin).find(s => s.id === x.special_id)?.special_name || '')} · ${fmtTime(Number(x.time), 0)} — ${esc(x.reason)}</div>`).join('')}</details>` : ''}
     <div class="latest">${latest ? `Último registo: <b>${esc(race.pointLabel(c.itin, latest))}</b>` : 'Ainda sem tempos registados.'}
       ${c.follow ? '<span class="tag live">a seguir ao vivo</span>' : `<button class="btn small" data-follow="${key}">↺ Seguir ao vivo</button>`}</div>
+    ${S.prox.on ? `<div class="proxline" id="prox-${key}">${proxLine(key)}</div>` : ''}
     ${itins.length > 1 ? `<div class="row"><label class="small muted">Classificação:</label>
       <select data-itin="${key}">${itins.map(it => `<option value="${it.id}" ${it.id === c.itin ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></div>` : ''}
     <div class="strip" data-scroll="sp-${key}">${sps.map(s => `<button class="sp ${s.id === c.sid ? 'on' : ''} ${isLive(s) ? 'livesp' : ''} st${s.state}" data-card="${key}" data-sid="${s.id}" ${s.state === 0 && !isLive(s) ? 'disabled' : ''} title="${esc(s.name_extra || '')} · ${STATE_LABEL[s.state] || ''}">
@@ -414,6 +439,7 @@ function pilotCard(t, race, c, latest, groups, p) {
 
 function bindCards() {
   const el = $('#view');
+  bindProxLines(el);
   const st = k => S.cards[k];
   el.querySelectorAll('[data-jump]').forEach(r => r.onclick = () => document.getElementById(`card-${r.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth' }));
   el.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => {
@@ -566,6 +592,195 @@ async function notify(title, body, tag) {
   }
 }
 
+// ---------- Avisos de proximidade (5 · 2 · 1 km) ----------
+const PROX_EVERY_MS = 10000;
+const trackSrc = new Map();   // id do mapa -> TrackSource
+const proxRes = new Map();    // "rid:pid" -> último resultado
+const proxState = new Map();  // "rid:pid" -> avisos já dados
+let gpsPos = null, gpsErr = null, geoId = null, proxTimer = null, proxBusy = false;
+
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state !== 'running') audioCtx.resume();
+  } catch { /* sem som */ }
+}
+// os browsers só deixam tocar som depois de um toque no ecrã
+document.addEventListener('pointerdown', () => { if (S.prox.on || audioCtx) unlockAudio(); }, { passive: true });
+
+function userPos() {
+  return S.prox.useFixed && S.prox.fixed ? S.prox.fixed : gpsPos;
+}
+
+function startGps() {
+  if (geoId != null || !('geolocation' in navigator)) {
+    if (!('geolocation' in navigator)) gpsErr = 'Este aparelho não tem localização.';
+    return;
+  }
+  geoId = navigator.geolocation.watchPosition(
+    p => { gpsPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() }; gpsErr = null; refreshProxPanel(); },
+    e => { gpsErr = e.code === 1 ? 'Localização bloqueada — autoriza nas definições do browser.' : 'Sem sinal GPS.'; refreshProxPanel(); },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+}
+
+function stopGps() {
+  if (geoId != null) navigator.geolocation.clearWatch(geoId);
+  geoId = null;
+}
+
+function setProx(on) {
+  S.prox.on = on;
+  save();
+  clearInterval(proxTimer);
+  proxTimer = null;
+  if (on) {
+    unlockAudio();
+    startGps();
+    proxTimer = setInterval(proxTick, PROX_EVERY_MS);
+    proxTick();
+  } else {
+    stopGps();
+  }
+  if (view === 'live') renderLive();
+}
+
+async function resolveTrackId(rid) {
+  if (rid in S.trackIds) return S.trackIds[rid];
+  await loadEvents();
+  let sid = 0;
+  for (const ev of events || []) {
+    const l = trackLinks(ev).find(x => x.rid === rid);
+    if (l) { sid = l.sid; break; }
+  }
+  if (events) { S.trackIds[rid] = sid; save(); }
+  return sid;
+}
+
+async function proxTick() {
+  if (!S.prox.on || proxBusy || !S.tracked.length) return;
+  proxBusy = true;
+  try {
+    const sids = new Map();
+    for (const t of S.tracked) sids.set(t.rid, await resolveTrackId(t.rid));
+    const used = new Set([...sids.values()].filter(Boolean));
+    await Promise.all([...used].map(sid => {
+      if (!trackSrc.has(sid)) trackSrc.set(sid, new TrackSource(sid));
+      return trackSrc.get(sid).refresh();
+    }));
+    const user = userPos();
+    for (const t of S.tracked) {
+      const key = keyOf(t);
+      const sid = sids.get(t.rid);
+      const p = getRace(t.rid).parts.get(t.pid);
+      const ident = p?.ident ?? t.ident;
+      const st = proxState.get(key) || {};
+      proxState.set(key, st);
+      const res = sid ? evaluate(st, trackSrc.get(sid), ident, user) : { status: 'notrack' };
+      proxRes.set(key, res);
+      if (res.alert && !S.prox.muted.includes(key)) {
+        const how = `${res.mode === 'estrada' ? 'pela estrada' : 'em linha reta'}${res.speed ? ` · ${Math.round(res.speed)} km/h` : ''}`;
+        flashProx(res.alert, `#${ident} ${p?.pilot || ''}`, `a ${fmtKm(res.dist)} · ${how}`);
+      }
+      const line = document.getElementById(`prox-${key}`);
+      if (line) line.innerHTML = proxLine(key);
+    }
+    bindProxLines($('#view'));
+  } finally {
+    proxBusy = false;
+  }
+}
+
+function proxPanel() {
+  const on = S.prox.on;
+  return `<div class="card prox ${on ? 'on' : ''}" id="proxPanel">${proxPanelInner()}</div>`;
+}
+
+function proxPanelInner() {
+  const on = S.prox.on;
+  const u = userPos();
+  let where = '';
+  if (on) {
+    if (S.prox.useFixed && S.prox.fixed) where = `📌 Ponto fixo (${S.prox.fixed.lat.toFixed(5)}, ${S.prox.fixed.lon.toFixed(5)})`;
+    else if (gpsErr) where = `<span class="bad">${esc(gpsErr)}</span>`;
+    else if (u) where = `🛰 GPS ativo${u.acc ? ` (±${Math.round(u.acc)} m)` : ''}`;
+    else where = 'À espera da tua localização…';
+  }
+  const sound = audioCtx && audioCtx.state === 'running';
+  return `<div class="row prox-h"><b>📍 Avisos de proximidade</b><span class="muted small">5 · 2 · 1 km</span>
+      <button class="btn small ${on ? '' : 'primary'}" id="proxToggle">${on ? 'Desligar' : 'Ligar'}</button></div>
+    ${on ? `<div class="small">${where}</div>
+      ${sound ? '' : '<div class="small warn-txt">Toca em qualquer sítio do ecrã para ativar o som.</div>'}
+      <div class="row wrap">
+        <button class="btn small" id="proxFix" ${gpsPos ? '' : 'disabled'}>📌 Fixar aqui</button>
+        ${S.prox.useFixed ? '<button class="btn small" id="proxGps">🛰 Usar GPS</button>' : ''}
+        <button class="btn small" id="proxTest">🔊 Testar sirene</button>
+      </div>
+      <div class="small muted">Posições dos pilotos atualizadas a cada ${PROX_EVERY_MS / 1000} s. Mantém a app aberta e o ecrã ligado.</div>`
+    : '<div class="small muted">Sirene e aviso no ecrã quando um piloto que acompanhas estiver a 5, 2 e 1 km de ti.</div>'}`;
+}
+
+function refreshProxPanel() {
+  const el = $('#proxPanel');
+  if (!el) return;
+  el.innerHTML = proxPanelInner();
+  bindProxPanel();
+}
+
+function proxLine(key) {
+  const r = proxRes.get(key);
+  const muted = S.prox.muted.includes(key);
+  const bell = `<button class="icon-btn bell" data-proxmute="${key}" title="${muted ? 'Ligar avisos deste piloto' : 'Silenciar este piloto'}">${muted ? '🔕' : '🔔'}</button>`;
+  let txt;
+  if (!r) txt = '<span class="muted">A obter posição do piloto…</span>';
+  else if (r.status === 'notrack') txt = '<span class="muted">Sem mapa público da Anube para esta corrida.</span>';
+  else if (r.status === 'error') txt = '<span class="bad">Mapa da Anube indisponível.</span>';
+  else if (r.status === 'nogps') txt = '<span class="muted">Sem posição GPS do piloto.</span>';
+  else if (r.status === 'stale') txt = `<span class="muted">GPS do piloto sem atualizar há ${fmtAge(r.age)}.</span>`;
+  else if (r.status === 'nouser') txt = '<span class="muted">À espera da tua localização…</span>';
+  else {
+    const near = r.dist > 0 && r.dist <= 1 ? 'near1' : r.dist > 0 && r.dist <= 2 ? 'near2' : r.dist > 0 && r.dist <= 5 ? 'near5' : '';
+    txt = r.passed ? `✅ Já passou por ti (${fmtKm(r.dist)})`
+      : `<b class="${near}">📍 a ${fmtKm(r.dist)}</b> ${r.mode === 'estrada' ? 'pela estrada' : 'em linha reta'}`;
+    if (r.speed) txt += ` · ${Math.round(r.speed)} km/h`;
+    if (r.age != null) txt += ` <span class="muted">· GPS há ${Math.round(r.age)} s</span>`;
+  }
+  return `<span class="ptxt">${txt}</span>${bell}`;
+}
+
+function fmtAge(s) {
+  if (s < 90) return `${Math.round(s)} s`;
+  if (s < 5400) return `${Math.round(s / 60)} min`;
+  if (s < 172800) return `${Math.round(s / 3600)} h`;
+  return `${Math.round(s / 86400)} dias`;
+}
+
+function bindProxLines(el) {
+  el?.querySelectorAll('[data-proxmute]').forEach(b => b.onclick = () => {
+    const k = b.dataset.proxmute;
+    const m = new Set(S.prox.muted);
+    if (m.has(k)) m.delete(k); else m.add(k);
+    S.prox.muted = [...m];
+    save();
+    b.parentElement.innerHTML = proxLine(k);
+    bindProxLines(el);
+  });
+}
+
+let flashTimer = null;
+function flashProx(km, who, sub) {
+  const f = $('#flash');
+  f.innerHTML = `<div class="fl-km">${km} km</div><div class="fl-who">${esc(who)}</div><div class="fl-sub">${esc(sub)}</div><div class="fl-hint">toca para fechar</div>`;
+  f.className = `flash show k${km}`;
+  f.onclick = () => { f.className = 'flash'; };
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { f.className = 'flash'; }, 5000);
+  if (S.settings.sound !== false) { unlockAudio(); siren(audioCtx, km === 1 ? 6 : km === 2 ? 4.5 : 3); }
+  try { navigator.vibrate?.(km === 1 ? [600, 200, 600, 200, 600] : [400, 150, 400]); } catch { /* sem vibração */ }
+  if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+    navigator.serviceWorker?.getRegistration().then(reg => reg?.showNotification(`🚨 ${who} a ${km} km`, { body: sub, tag: `prox-${who}`, renotify: true, icon: 'icons/icon-192.png', vibrate: [400, 150, 400] })).catch(() => {});
+  }
+}
+
 // ---------- Ecrã sempre ligado ----------
 async function updateWakeLock() {
   const want = S.settings.wake && view === 'live' && document.visibilityState === 'visible';
@@ -645,9 +860,10 @@ function openSettings() {
 $('#settingsBtn').addEventListener('click', openSettings);
 
 // ---------- Arranque ----------
-window.AnubeLive = { S, races, snaps, poll }; // acesso para diagnóstico na consola
+window.AnubeLive = { S, races, snaps, poll, trackSrc, proxRes, proxTick, flashProx }; // diagnóstico na consola
 applyTheme();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 render();
 if (S.tracked.length) { poll(); }
 schedule();
+if (S.prox.on) setProx(true);
