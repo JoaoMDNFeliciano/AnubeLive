@@ -238,14 +238,14 @@ const SOUND = {
     const g = master(ctx, t0, s, 0.45);
     bell(ctx, g, t0, s, [[1150, 0.6], [2770, 0.35], [4130, 0.2]], 24);
   },
-  // "trim-trim-trim … trim-trim-trim" (campainha de telefone antigo)
+  // "trim-trim … trim-trim" (campainha de telefone antigo)
   telefone(ctx, t0, s) {
     const g = master(ctx, t0, s, 0.5);
     const gate = ctx.createGain();
     gate.connect(g);
     gate.gain.setValueAtTime(0, t0);
-    for (let t = 0; t < s; t += 1.9) {
-      for (const r of [0, 0.4, 0.8]) {
+    for (let t = 0; t < s; t += 1.5) {
+      for (const r of [0, 0.4]) {
         gate.gain.setValueAtTime(1, t0 + t + r);
         gate.gain.setValueAtTime(0, t0 + t + r + 0.28);
       }
