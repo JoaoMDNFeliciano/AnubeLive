@@ -1,7 +1,7 @@
 // AnubeLive — interface, atualização periódica e alertas.
 import { api, fetchEvents, timingIds, trackLinks } from './api.js';
 import { Race, STATE_LABEL, attrsOf, isLive, posOf, fmtTime, fmtGap } from './race.js';
-import { TrackSource, evaluate, siren, fmtKm } from './proximity.js';
+import { TrackSource, evaluate, siren, fmtKm, SIRENS } from './proximity.js';
 
 const LS_KEY = 'anubelive.v1';
 const NEIGHBOURS = 3;
@@ -12,7 +12,7 @@ const defaults = () => ({
   event: null,                 // {id, name, rids}
   filter: { tab: 'ongoing', type: 'all', country: 'all', q: '' },
   cards: {},                   // estado de cada cartão por "rid:pid"
-  settings: { interval: 15, alerts: { pos: true, time: true, ab: true }, sound: true, wake: false, theme: 'auto' },
+  settings: { interval: 15, alerts: { pos: true, time: true, ab: true }, sound: true, wake: false, theme: 'auto', sirenType: 'ambulancia' },
   prox: { on: false, useFixed: false, fixed: null, muted: [] }, // avisos de proximidade
   trackIds: {},                // rallyId de cronometragem -> id do mapa de tracking (0 = sem mapa)
 });
@@ -774,7 +774,7 @@ function flashProx(km, who, sub) {
   f.onclick = () => { f.className = 'flash'; };
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { f.className = 'flash'; }, 5000);
-  if (S.settings.sound !== false) { unlockAudio(); siren(audioCtx, km === 1 ? 6 : km === 2 ? 4.5 : 3); }
+  if (S.settings.sound !== false) { unlockAudio(); siren(audioCtx, km === 1 ? 6 : km === 2 ? 4.5 : 3, S.settings.sirenType); }
   try { navigator.vibrate?.(km === 1 ? [600, 200, 600, 200, 600] : [400, 150, 400]); } catch { /* sem vibração */ }
   if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
     navigator.serviceWorker?.getRegistration().then(reg => reg?.showNotification(`🚨 ${who} a ${km} km`, { body: sub, tag: `prox-${who}`, renotify: true, icon: 'icons/icon-192.png', vibrate: [400, 150, 400] })).catch(() => {});
@@ -837,6 +837,10 @@ function openSettings() {
       ${perm === 'default' ? '<button type="button" class="btn" id="aPerm">Ativar notificações</button>' : ''}
       <button type="button" class="btn small" id="aTest">Testar alerta</button>
     </fieldset>
+    <fieldset><legend>Som dos avisos de proximidade (5 · 2 · 1 km)</legend>
+      <div class="row"><select id="sSiren">${Object.entries(SIRENS).map(([v, l]) => `<option value="${v}" ${st.sirenType === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="btn small" id="sSirenTest">▶ Ouvir</button></div>
+    </fieldset>
     <label class="chk"><input type="checkbox" id="sWake" ${st.wake ? 'checked' : ''}> Manter o ecrã ligado no ecrã "Ao vivo"</label>
     <label>Tema
       <select id="sTheme">${[['auto', 'Automático'], ['dark', 'Escuro'], ['light', 'Claro (melhor ao sol)']].map(([v, l]) => `<option value="${v}" ${st.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -848,12 +852,14 @@ function openSettings() {
     st.alerts = { pos: $('#aPos').checked, time: $('#aTime').checked, ab: $('#aAb').checked };
     st.sound = $('#aSound').checked;
     st.wake = $('#sWake').checked;
+    st.sirenType = $('#sSiren').value;
     st.theme = $('#sTheme').value;
     save(); applyTheme(); schedule(); updateWakeLock();
     if (view === 'live') renderLive();
   };
   d.querySelectorAll('select,input').forEach(i => i.onchange = upd);
   $('#aPerm')?.addEventListener('click', async () => { await Notification.requestPermission(); openSettings(); });
+  $('#sSirenTest').onclick = () => { unlockAudio(); siren(audioCtx, 3, $('#sSiren').value); };
   $('#aTest').onclick = () => notify('#000 Teste', '⏱ SS1 · I2: 3º na especial · 5º à geral\nClasse T1+: 3º → 2º ▲', 'teste');
   d.showModal();
 }

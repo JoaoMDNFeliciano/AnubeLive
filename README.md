@@ -26,7 +26,8 @@ No Chrome/Edge podes instalá-la como app: ícone "Instalar" na barra de endere�
 ## Avisos de proximidade (5 · 2 · 1 km)
 No ecrã "Ao vivo", **📍 Avisos de proximidade → Ligar**. A app cruza a posição GPS dos pilotos
 que acompanhas (mapa de tracking público da Anube) com a localização do telemóvel:
-- Sirene tipo ambulância + mensagem a piscar no ecrã durante 5 s aos 5, 2 e 1 km.
+- Sirene + mensagem a piscar no ecrã durante 5 s aos 5, 2 e 1 km. O som escolhe-se nas
+  Definições: ambulância, bombeiros, polícia, ataque aéreo, campainha de escola ou telefone antigo.
 - Distância **pela estrada** quando a Anube publica o traçado da especial; senão **em linha reta**.
 - Botão **📌 Fixar aqui** grava o ponto onde estás (útil se o GPS falhar); **🔔/🔕** silencia um piloto.
 - Posições dos pilotos lidas a cada 10 s. Só funciona com a app aberta e o ecrã ligado.

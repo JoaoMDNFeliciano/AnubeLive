@@ -138,27 +138,126 @@ export function evaluate(state, src, ident, user) {
   return { status: 'ok', dist, mode, speed: veh.speed, age, alert, passed: mode === 'estrada' && dist < 0 };
 }
 
-// Sirene tipo ambulância (dois tons alternados).
-export function siren(ctx, seconds = 4) {
-  if (!ctx) return;
-  const t0 = ctx.currentTime;
+// ---------- Sons de aviso (gerados no próprio aparelho, sem ficheiros) ----------
+export const SIRENS = {
+  ambulancia: 'Ambulância',
+  bombeiros: 'Bombeiros',
+  policia: 'Polícia',
+  ataque: 'Ataque aéreo',
+  escola: 'Campainha de escola',
+  telefone: 'Telefone antigo',
+};
+
+// Volume geral com subida e descida suaves (evita estalidos).
+function master(ctx, t0, seconds, vol) {
   const g = ctx.createGain();
   g.connect(ctx.destination);
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.05);
-  g.gain.setValueAtTime(0.3, t0 + seconds - 0.1);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.05);
+  g.gain.setValueAtTime(vol, t0 + seconds - 0.12);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + seconds);
-  for (const [type, mult] of [['square', 1], ['sawtooth', 2]]) {
-    const o = ctx.createOscillator();
-    o.type = type;
-    for (let t = 0; t < seconds; t += 0.9) {
-      o.frequency.setValueAtTime(960 * mult, t0 + t);
-      o.frequency.setValueAtTime(770 * mult, t0 + t + 0.45);
+  return g;
+}
+
+function osc(ctx, type, out, t0, seconds, detune = 0) {
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.detune.value = detune;
+  o.connect(out);
+  o.start(t0);
+  o.stop(t0 + seconds + 0.05);
+  return o;
+}
+
+// Som de campainha: vários tons metálicos a vibrar rapidamente (martelo na campânula).
+function bell(ctx, out, t0, seconds, partials, rate) {
+  const am = ctx.createGain();
+  am.gain.value = 0.5;
+  am.connect(out);
+  const depth = ctx.createGain();
+  depth.gain.value = 0.5;
+  depth.connect(am.gain);
+  osc(ctx, 'square', depth, t0, seconds).frequency.value = rate;
+  partials.forEach(([f, v]) => {
+    const g = ctx.createGain();
+    g.gain.value = v;
+    g.connect(am);
+    osc(ctx, 'sine', g, t0, seconds).frequency.value = f;
+  });
+}
+
+const SOUND = {
+  // dois tons alternados (hi-lo europeu)
+  ambulancia(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.3);
+    for (const [type, mult] of [['square', 1], ['sawtooth', 2]]) {
+      const o = osc(ctx, type, g, t0, s);
+      for (let t = 0; t < s; t += 0.9) {
+        o.frequency.setValueAtTime(960 * mult, t0 + t);
+        o.frequency.setValueAtTime(770 * mult, t0 + t + 0.45);
+      }
     }
-    o.connect(g);
-    o.start(t0);
-    o.stop(t0 + seconds + 0.05);
-  }
+  },
+  // sobe e desce devagar (wail)
+  bombeiros(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.28);
+    for (const [type, mult] of [['sawtooth', 1], ['square', 2]]) {
+      const o = osc(ctx, type, g, t0, s);
+      o.frequency.setValueAtTime(450 * mult, t0);
+      for (let t = 0; t < s; t += 2.4) {
+        o.frequency.linearRampToValueAtTime(1150 * mult, t0 + t + 1.2);
+        o.frequency.linearRampToValueAtTime(450 * mult, t0 + t + 2.4);
+      }
+    }
+  },
+  // varrimento rápido (yelp)
+  policia(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.28);
+    for (const [type, mult] of [['sawtooth', 1], ['square', 2]]) {
+      const o = osc(ctx, type, g, t0, s);
+      for (let t = 0; t < s; t += 0.32) {
+        o.frequency.setValueAtTime(650 * mult, t0 + t);
+        o.frequency.linearRampToValueAtTime(1450 * mult, t0 + t + 0.3);
+      }
+    }
+  },
+  // subida longa, patamar e descida lenta, com batimento entre dois tons
+  ataque(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.32);
+    const up = Math.min(2.5, s * 0.4), hold = Math.min(1.2, s * 0.25);
+    for (const det of [0, 18]) {
+      const o = osc(ctx, 'sawtooth', g, t0, s, det);
+      o.frequency.setValueAtTime(180, t0);
+      o.frequency.linearRampToValueAtTime(820, t0 + up);
+      o.frequency.setValueAtTime(820, t0 + up + hold);
+      o.frequency.linearRampToValueAtTime(260, t0 + s);
+    }
+  },
+  // campainha elétrica contínua
+  escola(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.45);
+    bell(ctx, g, t0, s, [[1150, 0.6], [2770, 0.35], [4130, 0.2]], 24);
+  },
+  // "trrrim-trrrim … trrrim-trrrim"
+  telefone(ctx, t0, s) {
+    const g = master(ctx, t0, s, 0.5);
+    const gate = ctx.createGain();
+    gate.connect(g);
+    gate.gain.setValueAtTime(0, t0);
+    for (let t = 0; t < s; t += 2.0) {
+      gate.gain.setValueAtTime(1, t0 + t);
+      gate.gain.setValueAtTime(0, t0 + t + 0.45);
+      gate.gain.setValueAtTime(1, t0 + t + 0.65);
+      gate.gain.setValueAtTime(0, t0 + t + 1.1);
+    }
+    bell(ctx, gate, t0, s, [[1000, 0.6], [1340, 0.45], [2400, 0.2]], 20);
+  },
+};
+
+// Toca o som escolhido durante "seconds" segundos.
+export function siren(ctx, seconds = 4, type = 'ambulancia') {
+  if (!ctx) return;
+  (SOUND[type] || SOUND.ambulancia)(ctx, ctx.currentTime + 0.02, seconds);
 }
 
 export function fmtKm(d) {
