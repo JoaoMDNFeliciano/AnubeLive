@@ -23,6 +23,11 @@ No Chrome/Edge podes instalá-la como app: ícone "Instalar" na barra de endere�
 - Alertas: mudança de posição, novo tempo, abandono/penalização (toast, som, vibração
   e notificação do sistema quando a app está em segundo plano).
 
+## Documentos oficiais (Sportity)
+Em cada corrida, o bloco **📄 Documentos oficiais** mostra o **código Sportity** do evento
+(botão Copiar, para colar na app Sportity) e o botão **Abrir** para o canal oficial
+(regulamento, direção de prova, CCD, inscritos, classificações). O link vem da Anube.
+
 ## Avisos de proximidade (5 · 2 · 1 km)
 No ecrã "Ao vivo", **📍 Avisos de proximidade → Ligar**. A app cruza a posição GPS dos pilotos
 que acompanhas (mapa de tracking público da Anube) com a localização do telemóvel:

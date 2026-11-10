@@ -201,6 +201,7 @@ async function renderPick() {
 
   el.innerHTML = `
     <div class="card pad"><div class="muted small">Prova</div><b>${esc(S.event.name)}</b></div>
+    ${docsBlock([pickRid])}
     ${rids.length > 1 ? `<div class="tabs">${rids.map(r => `<button class="tab ${r === pickRid ? 'on' : ''}" data-r="${r}">${raceNames.get(r) ? raceIcon(raceNames.get(r)) + ' ' + esc(raceNames.get(r)) : 'Corrida ' + r}</button>`).join('')}</div>` : ''}
     <div class="filters">
       <input id="pQ" type="search" placeholder="N.º, nome, viatura, classe…" value="${esc(pickQuery)}">
@@ -218,6 +219,7 @@ async function renderPick() {
     <div class="sticky-foot"><button class="btn primary" id="goLive" ${n ? '' : 'disabled'}>Acompanhar ao vivo (${n})</button></div>`;
 
   el.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { pickRid = Number(b.dataset.r); renderPick(); });
+  bindDocs(el);
   $('#pQ').oninput = e => {
     pickQuery = e.target.value;
     clearTimeout(renderPick.t);
@@ -315,12 +317,53 @@ function renderLive() {
 
   el.innerHTML = head + `
     ${S.tracked.length > 1 ? `<div class="card"><table class="sum"><thead><tr><th>N.º</th><th>Piloto</th><th>Último ponto</th><th>Geral</th><th>Classe</th></tr></thead><tbody>${summary.join('')}</tbody></table></div>` : ''}
+    ${docsBlock([...new Set(S.tracked.map(t => t.rid))])}
     ${cards.join('')}
     <p class="muted small center">Geral nos intermédios = acumulado oficial até à especial anterior + tempo no intermédio (provisória). Dados: Anube Sport.</p>`;
 
   el.querySelectorAll('[data-scroll]').forEach(n => { if (scrolls[n.dataset.scroll] != null) n.scrollLeft = scrolls[n.dataset.scroll]; else n.scrollLeft = n.scrollWidth; });
   bindLiveHead();
   bindCards();
+  bindDocs(el);
+}
+
+// ---------- Documentos oficiais (Sportity) ----------
+// O link vem da Anube (url_org_docs). No Sportity o código do evento é o nome do canal.
+function docsInfo(rid) {
+  const url = getRace(rid).info?.url_org_docs || '';
+  if (!/^https?:\/\//i.test(url)) return null;
+  const code = url.match(/sportity\.com\/(?:channel|event)\/([^/?#]+)/i)?.[1] || '';
+  return { url, code: code ? decodeURIComponent(code) : '' };
+}
+
+function docsBlock(rids) {
+  const rows = rids.map(rid => {
+    const d = docsInfo(rid);
+    if (!d) return '';
+    const name = getRace(rid).name;
+    return `<div class="docrow">
+      <div class="docname"><span class="muted small">${raceIcon(name)} ${esc(name)}</span>
+        ${d.code ? `<span class="small">Código Sportity: <b class="code">${esc(d.code)}</b></span>` : '<span class="small">Documentos no site da organização</span>'}</div>
+      ${d.code ? `<button class="btn small" data-copy="${esc(d.code)}">Copiar</button>` : ''}
+      <a class="btn small primary" href="${esc(d.url)}" target="_blank" rel="noopener">Abrir</a>
+    </div>`;
+  }).join('');
+  return rows ? `<div class="card docs"><div class="docs-h"><b>📄 Documentos oficiais</b><span class="muted small">regulamento, direção de prova, CCD, classificações</span></div>${rows}</div>` : '';
+}
+
+function bindDocs(el) {
+  el?.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+    const code = b.dataset.copy;
+    let ok = false;
+    try { await navigator.clipboard.writeText(code); ok = true; } catch {
+      // alternativa para browsers sem acesso à área de transferência
+      const ta = document.createElement('textarea');
+      ta.value = code; document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      ta.remove();
+    }
+    toast(ok ? `Código ${code} copiado.` : `Código: ${code}`);
+  });
 }
 
 function bindLiveHead() {

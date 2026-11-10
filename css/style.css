@@ -167,6 +167,14 @@ table { border-collapse: collapse; width: 100%; }
 .nb tr.me td { font-weight: 700; }
 .nb tr.other { background: var(--other); }
 
+/* Documentos oficiais (Sportity) */
+.docs { padding: 10px 12px; display: grid; gap: 8px; }
+.docs-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.docrow { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.docname { flex: 1; min-width: 0; display: grid; }
+.code { font-family: ui-monospace, Consolas, monospace; letter-spacing: .5px; color: var(--accent); }
+a.btn { text-decoration: none; display: inline-block; }
+
 /* Avisos de proximidade */
 .prox { padding: 10px 12px; display: grid; gap: 6px; }
 .prox.on { border-color: var(--accent); }
