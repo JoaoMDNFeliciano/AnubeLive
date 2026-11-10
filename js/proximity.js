@@ -238,19 +238,19 @@ const SOUND = {
     const g = master(ctx, t0, s, 0.45);
     bell(ctx, g, t0, s, [[1150, 0.6], [2770, 0.35], [4130, 0.2]], 24);
   },
-  // "trrrim-trrrim … trrrim-trrrim"
+  // "trim-trim-trim … trim-trim-trim" (campainha de telefone antigo)
   telefone(ctx, t0, s) {
     const g = master(ctx, t0, s, 0.5);
     const gate = ctx.createGain();
     gate.connect(g);
     gate.gain.setValueAtTime(0, t0);
-    for (let t = 0; t < s; t += 2.0) {
-      gate.gain.setValueAtTime(1, t0 + t);
-      gate.gain.setValueAtTime(0, t0 + t + 0.45);
-      gate.gain.setValueAtTime(1, t0 + t + 0.65);
-      gate.gain.setValueAtTime(0, t0 + t + 1.1);
+    for (let t = 0; t < s; t += 1.9) {
+      for (const r of [0, 0.4, 0.8]) {
+        gate.gain.setValueAtTime(1, t0 + t + r);
+        gate.gain.setValueAtTime(0, t0 + t + r + 0.28);
+      }
     }
-    bell(ctx, gate, t0, s, [[1000, 0.6], [1340, 0.45], [2400, 0.2]], 20);
+    bell(ctx, gate, t0, s, [[1560, 0.6], [2260, 0.4], [3480, 0.22]], 18);
   },
 };
 
