@@ -378,7 +378,7 @@ function pilotCard(t, race, c, latest, groups, p) {
   const nbSections = groups.map(g => {
     const pos = c.sid ? posOf(race.filter(rk(c.k), g), t.pid) : null;
     return `<details class="nbsec" id="nb-${key}-${esc(g.key)}" data-fold="${key}" data-gk="${esc(g.key)}" ${closed.includes(g.key) ? '' : 'open'}>
-      <summary><span>${esc(g.label)}${g.value ? ' <b>' + esc(g.value) + '</b>' : ''}</span><span class="pos">${pos ? pos + 'º' : '—'}</span></summary>
+      <summary title="Mostrar / esconder esta classificação"><span>${esc(g.label)}${g.value ? ' <b>' + esc(g.value) + '</b>' : ''}</span><span class="pos">${pos ? pos + 'º' : '—'}</span></summary>
       ${nbTable(g)}</details>`;
   }).join('');
 

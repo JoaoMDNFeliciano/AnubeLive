@@ -1,6 +1,6 @@
 // Service worker: guarda a app para abrir rápido e funcionar como app instalada.
 // Os dados de cronometragem vêm sempre da rede (nunca da cache).
-const CACHE = 'anubelive-v3';
+const CACHE = 'anubelive-v4';
 const ASSETS = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/api.js', 'js/race.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 

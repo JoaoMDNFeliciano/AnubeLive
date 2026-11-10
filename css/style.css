@@ -146,8 +146,13 @@ table { border-collapse: collapse; width: 100%; }
 .nbsec { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 8px; overflow: hidden; scroll-margin-top: 64px; }
 .nbsec summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: var(--card2); cursor: pointer; font-size: 13.5px; list-style: none; }
 .nbsec summary::-webkit-details-marker { display: none; }
-.nbsec summary::before { content: '▸'; color: var(--muted); margin-right: 2px; transition: transform .15s; }
-.nbsec[open] summary::before { transform: rotate(90deg); }
+.nbsec summary::after {
+  content: '+'; order: 3; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; font-size: 20px; font-weight: 700; line-height: 1;
+  background: var(--accent); color: var(--accent-ink);
+}
+.nbsec[open] summary::after { content: '−'; background: var(--card); color: var(--text); border: 1px solid var(--line); }
+.nbsec:not([open]) summary { opacity: .85; }
 .nbsec summary > span:first-of-type { flex: 1; color: var(--muted); }
 .nbsec summary b { color: var(--text); }
 .nbsec summary .pos { color: var(--accent); font-size: 15px; }
