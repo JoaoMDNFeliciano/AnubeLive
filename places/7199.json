@@ -1,0 +1,36 @@
+[
+  { "type": "pf", "name": "Parque Fechado – Campo Mártires da Pátria", "lat": 39.822999, "lon": -7.491099, "note": "Castelo Branco · após PRL, SS1 e SS2 (Briefing)" },
+
+  { "type": "assist", "name": "Zona de Assistência – Parque de Desportos Motorizados", "lat": 39.861198, "lon": -7.455605, "note": "Castelo Branco Motorsports Park (Briefing / Itinerário)" },
+
+  { "type": "start", "name": "Partida Prólogo – Parque de Desportos Motorizados", "lat": 39.861198, "lon": -7.455605, "note": "Carros e motos · local aproximado (dentro do parque)" },
+  { "type": "finish", "name": "Chegada Prólogo – Parque de Desportos Motorizados", "lat": 39.861198, "lon": -7.455605, "note": "Carros e motos · local aproximado (dentro do parque)" },
+
+  { "type": "start", "name": "Partida SS1 Carros – Moitas", "lat": 39.732934, "lon": -7.88048, "note": "Sábado · aprox.: mesmo troço da SS2 das motos (Arco da Moita)" },
+  { "type": "finish", "name": "Chegada SS1 Carros – Sobrainho da Ribeira", "lat": 39.820551, "lon": -7.75614, "note": "Sábado · aprox.: mesmo local da chegada da SS2 das motos" },
+  { "type": "start", "name": "Partida SS1 Motos – Isna de Oleiros", "lat": 39.823633, "lon": -7.871783, "note": "Sábado · aprox.: mesmo local da partida da SS2 dos carros" },
+  { "type": "finish", "name": "Chegada SS1 Motos – Freixial do Campo", "lat": 39.938127, "lon": -7.56256, "note": "Sábado · aprox.: mesmo local da chegada da SS2 dos carros" },
+
+  { "type": "start", "name": "Partida SS2 Carros – Isna", "lat": 39.823633, "lon": -7.871783, "note": "Domingo · coordenadas oficiais" },
+  { "type": "finish", "name": "Chegada SS2 Carros – Freixial do Campo", "lat": 39.938127, "lon": -7.56256, "note": "Domingo · coordenadas oficiais" },
+  { "type": "start", "name": "Partida SS2 Motos – Arco da Moita", "lat": 39.732934, "lon": -7.88048, "note": "Domingo · coordenadas oficiais" },
+  { "type": "finish", "name": "Chegada SS2 Motos – Sobraínho da Ribeira", "lat": 39.820551, "lon": -7.75614, "note": "Domingo · coordenadas oficiais" },
+
+  { "type": "gas", "name": "Reabastecimento – junto à Zona de Assistência", "lat": 39.861198, "lon": -7.455605, "note": "Carros e motos (Aditamento nº 2 / Briefing)" },
+  { "type": "gas", "name": "Refuel 01 – Isna de Oleiros (antes da partida)", "lat": 39.830576, "lon": -7.86057, "note": "Motos SS1 (Briefing) · carros SS2: zona ao km 59,72 da ligação, junto à partida em Isna" },
+  { "type": "gas", "name": "GAZ01 – Serra de São Domingos (km 59,98)", "lat": 39.850339, "lon": -8.095197, "note": "Motos SS1 (Briefing)" },
+  { "type": "gas", "name": "GAZ02 – Estreito (km 120,77)", "lat": 39.959008, "lon": -7.813767, "note": "Motos SS1 (Briefing)" },
+  { "type": "gas", "name": "Refuel 02 – Palvarinho, posto João Serras (km 7,49 lig. B)", "lat": 39.8775485, "lon": -7.5588712, "note": "Motos SS1 (Briefing)" },
+  { "type": "gas", "name": "Refuel 01 – Centro Ciência Viva (antes da partida)", "lat": 39.733736, "lon": -7.876261, "note": "Motos SS2 (Briefing)" },
+  { "type": "gas", "name": "GAZ01 – Peral (km 58,59)", "lat": 39.699666, "lon": -7.802485, "note": "Motos SS2 (Briefing)" },
+  { "type": "gas", "name": "Refuel 02 – Sarzedas (km 8,32 lig. B)", "lat": 39.851144, "lon": -7.690944, "note": "Motos SS2 (Briefing)" },
+
+  { "type": "fuel", "name": "Galp – EN 233, Vilares de Cima", "lat": 39.8455, "lon": -7.636833, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "Repsol – Zona Industrial, Castelo Branco", "lat": 39.856833, "lon": -7.458833, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "Galp – R. Eng. Pires Marques, Castelo Branco", "lat": 39.831833, "lon": -7.481, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "Galp – Av. Gen. Ramalho Eanes, Castelo Branco", "lat": 39.816167, "lon": -7.5015, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "BP – Rua do Terminal, Castelo Branco", "lat": 39.808167, "lon": -7.511, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "Galp – Sarnadas de Ródão", "lat": 39.752833, "lon": -7.6165, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" },
+  { "type": "fuel", "name": "Galp – Castelo Branco", "lat": 39.825667, "lon": -7.475, "note": "Posto autorizado (Aditamento nº 2) · posição não confirmada no mapa" },
+  { "type": "fuel", "name": "João Serras – ER 112, Salgueiro do Campo", "lat": 39.8775485, "lon": -7.5588712, "note": "Posto autorizado aos concorrentes (Aditamento nº 2)" }
+]
