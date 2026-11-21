@@ -1,6 +1,6 @@
 // Service worker: guarda a app para abrir rápido e funcionar como app instalada.
 // Os dados de cronometragem vêm sempre da rede (nunca da cache).
-const CACHE = 'motortracker-v17';
+const CACHE = 'motortracker-v18';
 const ASSETS = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/api.js', 'js/race.js', 'js/proximity.js', 'js/places.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 

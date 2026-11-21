@@ -204,6 +204,7 @@ async function renderPick() {
 
   el.innerHTML = `
     <div class="card pad"><div class="muted small">Prova</div><b>${esc(S.event.name)}</b></div>
+    <button class="btn stand-open" id="pickStand">🏆 Classificação geral e por classes</button>
     ${docsBlock([pickRid])}
     ${rids.length > 1 ? `<div class="tabs">${rids.map(r => `<button class="tab ${r === pickRid ? 'on' : ''}" data-r="${r}">${raceNames.get(r) ? raceIcon(raceNames.get(r)) + ' ' + esc(raceNames.get(r)) : 'Corrida ' + r}</button>`).join('')}</div>` : ''}
     <div class="filters">
@@ -250,6 +251,7 @@ async function renderPick() {
     $('#liveBtn').textContent = `Ao vivo (${S.tracked.length})`;
   });
   $('#goLive').onclick = () => { go('live'); poll(); };
+  $('#pickStand').onclick = openStand;
 }
 
 function track(rid, p, on) {
@@ -280,8 +282,8 @@ function cardState(t, race) {
 function renderLive() {
   const el = $('#view');
   if (!S.tracked.length) {
-    el.innerHTML = `<div class="card pad center"><p>Ainda não estás a acompanhar nenhum piloto.</p><button class="btn primary" id="toEv">Escolher prova</button></div>`;
-    $('#toEv').onclick = () => go('events');
+    el.innerHTML = `<div class="card pad center"><p>Ainda não estás a acompanhar nenhum piloto.</p><button class="btn primary" id="toEv">${S.event ? 'Escolher pilotos' : 'Escolher prova'}</button></div>`;
+    $('#toEv').onclick = () => go(S.event ? 'pick' : 'events');
     return;
   }
   // guarda posição do scroll horizontal das grelhas
@@ -346,7 +348,7 @@ function renderLive() {
 }
 
 // ---------- Classificação completa (geral e por classes) ----------
-const stand = { rid: null, itin: null, gkey: 'all', timer: null, busy: new Set(), view: '' };
+const stand = { rid: null, itin: null, gkey: 'all', timer: null, busy: new Set(), view: '', only: false, jump: null, groups: [] };
 
 // Última especial iniciada que já tem acumulado publicado.
 function standSpecial(race, itin) {
@@ -359,12 +361,23 @@ function standSpecial(race, itin) {
 
 async function openStand() {
   const rids = addRids();
+  if (view === 'pick' && pickRid !== stand.rid) { stand.rid = pickRid; stand.itin = null; stand.gkey = 'all'; }
   if (!rids.includes(stand.rid)) stand.rid = S.tracked[0]?.rid ?? rids[0];
   $('#standDlg').showModal();
   renderStand();
   clearInterval(stand.timer);
   stand.timer = setInterval(refreshStand, S.settings.interval * 1000);
   refreshStand();
+}
+
+// Selecionar ou retirar um piloto sem sair da classificação.
+function standToggle(rid, pid, on) {
+  const p = getRace(rid).parts.get(pid) || { id: pid };
+  track(rid, p, on);
+  if (!S.tracked.length) stand.only = false;
+  render();
+  renderStand();
+  if (on) poll();
 }
 
 // As corridas dos pilotos seguidos já são atualizadas pelo ciclo principal.
@@ -388,7 +401,14 @@ function renderStand() {
   body.querySelectorAll('[data-tabs]').forEach(n => { keep[n.dataset.tabs] = n.scrollLeft; });
   const oldTop = body.querySelector('.stand-wrap')?.scrollTop || 0;
 
-  let html = raceTabs, sig = '';
+  const selected = `<div class="stand-sel">
+      <div class="stand-sel-h"><b>⭐ Selecionados (${S.tracked.length})</b>
+        ${S.tracked.length ? `<button class="chip tog ${stand.only ? 'on' : 'off-plain'}" id="standOnly" aria-pressed="${stand.only}">Só estes</button>
+        <button class="btn small" id="standLive">Ver ao vivo</button>` : ''}</div>
+      ${S.tracked.length ? `<div class="tabs" data-tabs="sel">${S.tracked.map(t => `<span class="selchip"><button data-sj="${keyOf(t)}" title="Ver na classificação">${esc(t.ident)}</button><button data-su="${keyOf(t)}" aria-label="Retirar o n.º ${esc(t.ident)}">✕</button></span>`).join('')}</div>`
+        : '<div class="muted small">Toca na ☆ de um piloto para o selecionares.</div>'}
+    </div>`;
+  let html = raceTabs + selected, sig = '';
   if (!race.loaded || !race.lastOk && !race.itins.some(i => standSpecial(race, i.id))) {
     html += race.error
       ? `<p class="bad center pad">Não foi possível obter a classificação: ${esc(race.error)}</p>`
@@ -405,10 +425,10 @@ function renderStand() {
     // Pilotos sem classificação (abandono ou sem tempo) ficam no fim da lista.
     const ranked = new Set(all.map(r => r.pid));
     const members = race.members.get(stand.itin);
-    const others = sp ? [...race.parts.values()]
+    const others = [...race.parts.values()]
       .filter(p => !ranked.has(p.id) && (race.itins.length < 2 || !members?.size || members.has(p.id)))
       .sort((a, b) => (parseInt(a.ident, 10) || 1e9) - (parseInt(b.ident, 10) || 1e9))
-      .map(p => ({ pid: p.id, out: true })) : [];
+      .map(p => ({ pid: p.id, out: true }));
     const everyone = [...all, ...others];
     const groups = race.allGroups().filter(g => !everyone.length || g.kind === 'all' || race.filter(everyone, g).length);
     stand.groups = groups;
@@ -416,24 +436,28 @@ function renderStand() {
     stand.gkey = group.key;
     const rows = race.filter(everyone, group);
     const classified = rows.filter(r => !r.out).length;
-    sig = `${stand.rid}:${stand.itin}:${group.key}`;
+    sig = `${stand.rid}:${stand.itin}:${group.key}:${stand.only}`;
     const mine = new Set(S.tracked.filter(t => t.rid === stand.rid).map(t => t.pid));
     const live = sp && isLive(sp);
 
     html += `${race.itins.length > 1 ? `<select id="standItin" aria-label="Itinerário">${race.itins.map(i => `<option value="${i.id}" ${i.id === stand.itin ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs" data-tabs="class">${groups.map((g, i) => `<button class="tab ${g.key === group.key ? 'on' : ''}" data-sg="${i}" title="${esc(g.label)}">${esc(g.value)}</button>`).join('')}</div>
-      <div class="muted small">${sp ? `Após ${esc(sp.special_name || 'especial')}${live ? ' · <span class="bad">provisória, em curso</span>' : ''} · ${classified} ${classified === 1 ? 'classificado' : 'classificados'}${rows.length > classified ? ` · ${rows.length - classified} sem classificação` : ''}` : 'Ainda não há tempos publicados.'}</div>`;
-    if (rows.length) {
+      <div class="muted small">${sp ? `Após ${esc(sp.special_name || 'especial')}${live ? ' · <span class="bad">provisória, em curso</span>' : ''} · ${classified} ${classified === 1 ? 'classificado' : 'classificados'}${rows.length > classified ? ` · ${rows.length - classified} sem classificação` : ''}` : `Ainda sem tempos · ${rows.length} ${rows.length === 1 ? 'inscrito' : 'inscritos'}`}</div>`;
+    const shownRows = stand.only ? rows.filter(r => mine.has(r.pid)) : rows;
+    if (stand.only && !shownRows.length) html += '<p class="muted center pad">Nenhum dos teus pilotos nesta classe.</p>';
+    if (shownRows.length) {
       const best = rows[0].v;
-      html += `<div class="stand-wrap"><table class="stand-t"><thead><tr><th class="c-pos">Pos</th><th class="c-num">N.º</th><th>Piloto</th><th class="c-tm">Tempo</th><th class="c-gap">Dif.</th></tr></thead><tbody>${rows.map((r, i) => {
+      const star = (r, p) => { const on = mine.has(r.pid); return `<td class="c-sel"><button class="star ${on ? 'on' : ''}" data-st="${r.pid}" aria-pressed="${on}" aria-label="${on ? 'Retirar' : 'Selecionar'} o n.º ${esc(p.ident ?? '')}">${on ? '★' : '☆'}</button></td>`; };
+      html += `<div class="stand-wrap"><table class="stand-t"><thead><tr><th class="c-sel" aria-label="Selecionar"></th><th class="c-pos">Pos</th><th class="c-num">N.º</th><th>Piloto</th><th class="c-tm">Tempo</th><th class="c-gap">Dif.</th></tr></thead><tbody>${rows.map((r, i) => {
+        if (stand.only && !mine.has(r.pid)) return '';
         const p = race.parts.get(r.pid) || {};
         const who = [p.pilot, p.copilot].filter(Boolean).join(' / ');
         if (r.out) {
           const ab = race.abandoned(r.pid);
-          return `<tr class="out ${mine.has(r.pid) ? 'me' : ''}"><td class="pos c-pos">—</td><td class="num c-num">${esc(p.ident ?? '')}</td><td title="${esc([who, p.vehicle].filter(Boolean).join(' · '))}">${esc(p.pilot || '—')}</td><td class="c-tm">—</td><td class="c-gap ${ab ? 'bad' : 'muted'}">${ab ? 'Abandono' : 'Sem tempo'}</td></tr>`;
+          return `<tr data-row="${r.pid}" class="out ${mine.has(r.pid) ? 'me' : ''}">${star(r, p)}<td class="pos c-pos">—</td><td class="num c-num">${esc(p.ident ?? '')}</td><td title="${esc([who, p.vehicle].filter(Boolean).join(' · '))}">${esc(p.pilot || '—')}</td><td class="c-tm">—</td><td class="c-gap ${ab ? 'bad' : 'muted'}">${ab ? 'Abandono' : sp ? 'Sem tempo' : 'Inscrito'}</td></tr>`;
         }
         const gap = r.missing ? `−${r.missing} SS` : i === 0 ? 'líder' : fmtGap(r.v - best, race.dec);
-        return `<tr class="${mine.has(r.pid) ? 'me' : ''}"><td class="pos c-pos">${i + 1}º</td><td class="num c-num">${esc(p.ident ?? '')}</td><td title="${esc([who, p.vehicle].filter(Boolean).join(' · '))}">${esc(p.pilot || '—')}${race.abandoned(r.pid) ? ' <span class="bad">AB</span>' : ''}</td><td class="c-tm">${fmtTime(r.v, race.dec)}${r.pen ? `<sup class="bad" title="Inclui penalização de ${esc(fmtTime(r.pen, race.dec))}">P</sup>` : ''}</td><td class="c-gap muted">${gap}</td></tr>`;
+        return `<tr data-row="${r.pid}" class="${mine.has(r.pid) ? 'me' : ''}">${star(r, p)}<td class="pos c-pos">${i + 1}º</td><td class="num c-num">${esc(p.ident ?? '')}</td><td title="${esc([who, p.vehicle].filter(Boolean).join(' · '))}">${esc(p.pilot || '—')}${race.abandoned(r.pid) ? ' <span class="bad">AB</span>' : ''}</td><td class="c-tm">${fmtTime(r.v, race.dec)}${r.pen ? `<sup class="bad" title="Inclui penalização de ${esc(fmtTime(r.pen, race.dec))}">P</sup>` : ''}</td><td class="c-gap muted">${gap}</td></tr>`;
       }).join('')}</tbody></table></div>`;
     }
   }
@@ -446,11 +470,33 @@ function renderStand() {
   const wrap = body.querySelector('.stand-wrap');
   if (wrap && sig === stand.view) wrap.scrollTop = oldTop;
   if (sig) stand.view = sig;
+  if (wrap && stand.jump != null) {
+    const row = wrap.querySelector(`[data-row="${stand.jump}"]`);
+    if (row) { wrap.scrollTop = Math.max(0, row.offsetTop - wrap.querySelector('thead').offsetHeight); stand.jump = null; }
+  }
 
   body.querySelectorAll('[data-sr]').forEach(b => b.onclick = () => {
     stand.rid = Number(b.dataset.sr); stand.itin = null; stand.gkey = 'all';
     renderStand(); refreshStand();
   });
+  body.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    const pid = Number(b.dataset.st);
+    standToggle(stand.rid, pid, !isTracked(stand.rid, pid));
+  });
+  body.querySelectorAll('[data-su]').forEach(b => b.onclick = () => {
+    const [rid, pid] = b.dataset.su.split(':').map(Number);
+    standToggle(rid, pid, false);
+  });
+  body.querySelectorAll('[data-sj]').forEach(b => b.onclick = () => {
+    const [rid, pid] = b.dataset.sj.split(':').map(Number);
+    if (rid !== stand.rid) stand.itin = null;
+    stand.rid = rid; stand.gkey = 'all'; stand.only = false; stand.jump = pid;
+    renderStand(); refreshStand();
+  });
+  const only = body.querySelector('#standOnly');
+  if (only) only.onclick = () => { stand.only = !stand.only; renderStand(); };
+  const toLive = body.querySelector('#standLive');
+  if (toLive) toLive.onclick = () => { $('#standDlg').close(); go('live'); poll(); };
   body.querySelectorAll('[data-sg]').forEach(b => b.onclick = () => { stand.gkey = stand.groups[Number(b.dataset.sg)].key; renderStand(); });
   const it = body.querySelector('#standItin');
   if (it) it.onchange = () => { stand.itin = Number(it.value); stand.gkey = 'all'; renderStand(); };
