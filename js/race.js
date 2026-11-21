@@ -217,6 +217,33 @@ export class Race {
     return out;
   }
 
+  // Todas as classificações existentes na corrida (sem repetir grupos com os mesmos pilotos).
+  allGroups() {
+    const parts = [...this.parts.values()];
+    const main = String(this.info?.uppermost || '').slice(0, 3);
+    const order = ['cat', 'cla', 'grp'].sort((a, b) => (b === main) - (a === main));
+    const field = { cat: 'category', cla: 'class', grp: 'group' };
+    const label = { cat: 'Categoria', cla: 'Classe', grp: 'Grupo' };
+    const defs = [];
+    const byName = (a, b) => String(a).localeCompare(String(b), 'pt', { numeric: true });
+    for (const kind of order) {
+      const f = field[kind];
+      for (const value of [...new Set(parts.map(x => x[f]).filter(Boolean))].sort(byName)) {
+        defs.push({ key: `${kind}:${value}`, kind, label: label[kind], value, test: x => x[f] === value });
+      }
+    }
+    for (const value of [...new Set(parts.flatMap(attrsOf))].sort(byName)) {
+      defs.push({ key: `att:${value}`, kind: 'att', label: 'Campeonato', value, test: x => attrsOf(x).includes(value) });
+    }
+    const out = [{ key: 'all', kind: 'all', label: 'Geral', value: 'Geral', test: () => true, sig: '*' }];
+    for (const d of defs) {
+      const ids = parts.filter(d.test).map(x => x.id).sort((a, b) => a - b);
+      d.sig = ids.length === parts.length ? '*' : ids.join(',');
+      if (!out.some(o => o.sig === d.sig)) out.push(d);
+    }
+    return out;
+  }
+
   filter(rows, group) {
     if (!group || group.kind === 'all') return rows;
     return rows.filter(r => group.test(this.parts.get(r.pid) || {}));
